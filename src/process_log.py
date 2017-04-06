@@ -410,56 +410,58 @@ class LogAnalysis:
         """
         Processes busy hours histogram using moving average algorithm
         """
-        # print 'self.nseconds =', self.nseconds
-        # print 'self.time0_loc =', self.time0_loc.strftime("%d/%b/%Y:%H:%M:%S")
-        # time_last = self.time0_loc + timedelta(0, self.nseconds)
-        # print 'time_last =', time_last.strftime("%d/%b/%Y:%H:%M:%S")
-        # print
-
-        # print '\nbusy_hours_hist\n'
-
-        # print 'len(self.seconds) =', len(self.seconds), 'self.nseconds =', self.nseconds
-
-        # for i in range(self.nseconds):
-        #     print i, self.seconds[i]
-
         time_dt = self.time0_loc
         time_str = time_dt.strftime("%d/%b/%Y:%H:%M:%S")
-        time_str += ' +0400'
+        time_str += ' -0400'
         visits = sum(self.seconds[:3600])
         p = (time_str, visits)
         self.top_hours[0] = p
 
-        # print 'visits =', visits
-
-        # print '\nself.tcur =', self.tcur, 'len(self.tvis) =', len(self.tvis), 'len(self.tsec) =', len(self.tsec)
-        # for i in range(len(self.tvis)):
-        #     print i, 'self.tvis[i] =', self.tvis[i], 'self.tsec[i] + 1 =', self.tsec[i] + 1
+        # pair of two indices
+        first = 0               # the first point of the current hour
+        last = self.tsec[-1]    # the first point beyond the current hour
 
         run_sum = 0
         nhours = 0
-        for i in range(len(self.tsec)):
-            if self.tsec[i] > 3600:
+        for last in range(len(self.tsec)):
+            if self.tsec[last] > 3600:
                 break
-            run_sum += self.tvis[i]
-
+            run_sum += self.tvis[last]
 
         time_dt = self.time0_loc + timedelta(0, 0)
         time_str = time_dt.strftime("%d/%b/%Y:%H:%M:%S")
         time_str += ' -0400'
         p = (time_str, run_sum)
         # self.top_hours.insert(0, p)
+        # self.top_hours.pop()
 
-        for i in range(1, len(self.tsec)):
-            prev = self.tvis[i-1]
-            next = self.tvis[3600+i] if len(self.tsec) > 3600 else 0
-            run_sum += next - prev
-            # print '  -- run_sum =', run_sum
+        run_sum_max = run_sum
+        time_str_max = time_str
 
-            time_dt = self.time0_loc + timedelta(0, i)
+        # print 'before main loop: last =', last, 'self.tsec[last] =', self.tsec[last]
+
+        for first in range(1, len(self.tsec)):
+            run_sum -= self.tvis[first-1]   # remove the first point from the running sum
+            while self.tsec[last] - self.tsec[first] < 3600:
+                last += 1
+                if last >= len(self.tsec):
+                    last = len(self.tsec) - 1
+                    break
+
+                run_sum += self.tvis[last]  # add
+
+            time_dt = self.time0_loc + timedelta(0, self.tsec[first])
             time_str = time_dt.strftime("%d/%b/%Y:%H:%M:%S")
             time_str += ' -0400'
             p = (time_str, run_sum)
+
+            if run_sum > run_sum_max:
+                run_sum_max = run_sum
+                time_str_max = time_str
+
+            # print run_sum
+            # if first < 10000000:
+            #     print 'first =', first, 'last =', last, 'self.tsec[firt] =', self.tsec[first], 'self.tsec[last] =', self.tsec[last], 'dt =', self.tsec[last] - self.tsec[first], 'run_sum =', run_sum
 
             n = 0
             while p[1] < self.top_hours[n][1]:
@@ -470,32 +472,7 @@ class LogAnalysis:
             self.top_hours.insert(n, p)
             self.top_hours.pop()
 
-
-        # print 'run_sum =', run_sum
-
-        # isec = 1
-        # #-- while isec + 3600 < self.nseconds:
-        # while isec < self.nseconds:
-        #     if self.seconds[isec] == 0:
-        #         isec += 1
-        #         continue
-        #     visits += self.seconds[isec+3600] - self.seconds[isec-1]
-        #     # print '   .. visits =', visits, 'isec =', isec
-        #     time_dt = self.time0_loc + timedelta(0, isec)
-        #     time_str = time_dt.strftime("%d/%b/%Y:%H:%M:%S")
-        #     time_str += ' -0400'
-        #     p = (time_str, visits)
-
-        #     n = 0
-        #     while p[1] < self.top_hours[n][1]:
-        #         n += 1
-        #         if n >= len(self.top_hours):
-        #             break
-
-        #     self.top_hours.insert(n, p)
-        #     self.top_hours.pop()
-
-        #     isec += 1                   # increament the loop variable
+        # print '\nrun_sum_max =', run_sum_max, 'time_str_max =', time_str_max
 
         print '\nBusy hours'
         with open(ofname_hours_txt, "w") as ofile_hours:
